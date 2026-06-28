@@ -1,0 +1,343 @@
+// ============================================================================
+// AIVolve — Prisma Schema
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum Role {
+  STUDENT
+  ADMIN
+}
+
+enum SkillStatus {
+  NOT_STARTED
+  LEARNING
+  PRACTICING
+  PROFICIENT
+}
+
+enum SkillCategory {
+  PROGRAMMING
+  FRAMEWORK
+  DATABASE
+  DEVOPS
+  DESIGN
+  SOFT_SKILL
+  CORE_ENGINEERING
+  OTHER
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+  ARCHIVED
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum AchievementCategory {
+  SKILL
+  PROJECT
+  ROADMAP
+  PLACEMENT
+  STREAK
+  COMMUNITY
+}
+
+enum AnnouncementAudience {
+  ALL
+  STUDENTS
+  ADMINS
+}
+
+// ============================================================================
+// CORE: USERS & AUTH
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  image         String?
+  role          Role      @default(STUDENT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  accounts    Account[]
+  sessions    Session[]
+  profile     Profile?
+  skills      Skill[]
+  roadmaps    Roadmap[]
+  projects    Project[]
+  achievements Achievement[]
+  analytics   AnalyticsSnapshot[]
+  placement   PlacementPrep?
+  announcementsAuthored Announcement[] @relation("AnnouncementAuthor")
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
+  type    String   @default("EMAIL_VERIFICATION") // EMAIL_VERIFICATION | PASSWORD_RESET
+
+  @@unique([email, token])
+  @@index([email])
+}
+
+// ============================================================================
+// PROFILE
+// ============================================================================
+
+model Profile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  bio             String?  @db.Text
+  college         String?
+  branch          String?
+  graduationYear  Int?
+  careerInterests String[] @default([])
+  goals           String[] @default([])
+  location        String?
+  githubUrl       String?
+  linkedinUrl     String?
+  portfolioUrl    String?
+  avatarUrl       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================================
+// SKILLS TRACKER
+// ============================================================================
+
+model Skill {
+  id          String        @id @default(cuid())
+  userId      String
+  name        String
+  category    SkillCategory @default(OTHER)
+  status      SkillStatus   @default(NOT_STARTED)
+  progress    Int           @default(0) // 0–100
+  notes       String?       @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, category])
+}
+
+// ============================================================================
+// ROADMAPS & MILESTONES
+// ============================================================================
+
+model Roadmap {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?  @db.Text
+  targetDate  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  milestones Milestone[]
+
+  @@index([userId])
+}
+
+model Milestone {
+  id          String          @id @default(cuid())
+  roadmapId   String
+  title       String
+  description String?         @db.Text
+  status      MilestoneStatus @default(PENDING)
+  order       Int             @default(0)
+  dueDate     DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  roadmap Roadmap @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+
+  @@index([roadmapId])
+  @@index([roadmapId, order])
+}
+
+// ============================================================================
+// PROJECTS
+// ============================================================================
+
+model Project {
+  id           String        @id @default(cuid())
+  userId       String
+  title        String
+  description  String?       @db.Text
+  status       ProjectStatus @default(PLANNING)
+  technologies String[]      @default([])
+  repoUrl      String?
+  liveUrl      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+}
+
+// ============================================================================
+// ACHIEVEMENTS
+// ============================================================================
+
+model Achievement {
+  id          String               @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  category    AchievementCategory
+  icon        String?              // icon identifier (lucide icon name)
+  unlockedAt  DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================================================
+// PLACEMENT PREPARATION
+// ============================================================================
+
+model PlacementPrep {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  aptitudeProgress     Int @default(0) // 0–100
+  dsaProgress          Int @default(0)
+  coreSubjectsProgress Int @default(0)
+  mockInterviewsCount  Int @default(0)
+  resumeProgress       Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mockInterviews   MockInterview[]
+}
+
+model MockInterview {
+  id              String   @id @default(cuid())
+  placementPrepId String
+  title           String
+  date            DateTime
+  feedback        String?  @db.Text
+  score           Int? // 0–100
+
+  createdAt DateTime @default(now())
+
+  placementPrep PlacementPrep @relation(fields: [placementPrepId], references: [id], onDelete: Cascade)
+
+  @@index([placementPrepId])
+}
+
+// ============================================================================
+// ANALYTICS
+// ============================================================================
+
+model AnalyticsSnapshot {
+  id                String   @id @default(cuid())
+  userId            String
+  date              DateTime @default(now())
+  skillsCompleted   Int      @default(0)
+  roadmapProgress   Int      @default(0) // 0–100 aggregate
+  projectsCompleted Int      @default(0)
+  weeklyActiveHours Float    @default(0)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, date])
+}
+
+// ============================================================================
+// ADMIN
+// ============================================================================
+
+model Announcement {
+  id        String               @id @default(cuid())
+  title     String
+  body      String               @db.Text
+  audience  AnnouncementAudience @default(ALL)
+  authorId  String
+  published Boolean              @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  author User @relation("AnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([audience, published])
+}
